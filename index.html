@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#070a0f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="Contachilometri GPS con distanza parziale, totale, velocità media di viaggio e numero vignetta.">
+<title>Trip Regolarità 2.0</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preload" href="fonts/rajdhani-700.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/chakra-petch-700.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+  :root{
+    --bg:#070a0f; --card:#101822; --line:#1c2836; --text:#e8eef7; --muted:#7f93aa;
+    --cyan:#22d3ee; --amber:#fbbf24; --green:#34d399; --red:#f87171;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  }
+  /* font racing: Chakra Petch = señalétique da cruscotto, Rajdhani = cifre da strumento di bordo */
+  @font-face{font-family:'Rajdhani';font-weight:700;font-style:normal;font-display:swap;
+    src:url('fonts/rajdhani-700.woff2') format('woff2')}
+  @font-face{font-family:'Chakra Petch';font-weight:600;font-style:normal;font-display:swap;
+    src:url('fonts/chakra-petch-600.woff2') format('woff2')}
+  @font-face{font-family:'Chakra Petch';font-weight:700;font-style:normal;font-display:swap;
+    src:url('fonts/chakra-petch-700.woff2') format('woff2')}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{
+    background:
+      repeating-linear-gradient(45deg,rgba(255,255,255,.016) 0 2px,transparent 2px 5px) fixed,
+      repeating-linear-gradient(-45deg,rgba(0,0,0,.26) 0 2px,transparent 2px 5px) fixed,
+      radial-gradient(1200px 620px at 50% -12%, #10202c 0%, #070a0f 58%) fixed, var(--bg);
+    color:var(--text);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    overscroll-behavior:none; -webkit-user-select:none; user-select:none;
+    touch-action:manipulation;
+  }
+  body{overflow:hidden}
+  .wrap{max-width:680px;margin:0 auto;height:100%;
+    padding:8px 14px calc(88px + env(safe-area-inset-bottom));
+    display:flex;flex-direction:column;gap:10px}
+  main{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:10px}
+  /* le card si ripartiscono l'altezza disponibile: nessuna pagina da scorrere */
+  main > .card{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:center}
+
+  .top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 2px 9px;
+    border-bottom:1px solid rgba(239,68,68,.22)}
+  .brand{display:flex;align-items:center;gap:9px;font-family:'Chakra Petch',system-ui,sans-serif;
+    font-weight:700;letter-spacing:.13em;font-size:16px;color:#ef4444;min-width:0;white-space:nowrap}
+  .brand::before{content:'';flex:0 0 auto;width:15px;height:15px;border-radius:3px;
+    background:conic-gradient(#0c1016 0 25%,#dbe4ef 0 50%,#0c1016 0 75%,#dbe4ef 0);
+    box-shadow:inset 0 0 0 1px rgba(232,238,247,.22),0 1px 2px rgba(0,0,0,.6)}
+  .ver{font:800 10px/1 var(--mono);letter-spacing:.06em;color:#fca5a5;background:rgba(248,113,113,.12);
+    border:1px solid rgba(248,113,113,.35);border-radius:999px;padding:4px 6px}
+  .top-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+  .gear{appearance:none;-webkit-appearance:none;width:40px;height:40px;padding:0;border-radius:12px;
+    border:1px solid #2c3e52;background:linear-gradient(180deg,#1b2531,#0f1720);color:#9fb2c8;display:grid;place-items:center;cursor:pointer;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.10),inset 0 -3px 5px rgba(0,0,0,.45),0 3px 0 #060b11,0 6px 10px rgba(0,0,0,.45);
+    transition:transform .05s ease, box-shadow .05s ease, filter .15s}
+  .gear:active{transform:translateY(3px);filter:brightness(1.05);
+    box-shadow:inset 0 2px 5px rgba(0,0,0,.55),0 0 0 #060b11,0 2px 4px rgba(0,0,0,.4)}
+  .gear svg{width:20px;height:20px;display:block}
+  .dot{width:9px;height:9px;border-radius:50%;background:#3f4d5e;box-shadow:0 0 0 0 rgba(52,211,153,.6)}
+  .dot.ok{background:var(--green);animation:pulse 2.4s infinite}
+  .dot.weak{background:var(--amber)}
+  .dot.error{background:var(--red)}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.55)}70%{box-shadow:0 0 0 9px rgba(52,211,153,0)}100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}}
+
+  .badge{font:600 11.5px/1 var(--mono);padding:8px 11px;border-radius:999px;background:#121b26;border:1px solid #223040;color:#9fb2c8;white-space:nowrap}
+  .badge.ok{background:rgba(52,211,153,.14);border-color:rgba(52,211,153,.45);color:#6ee7b7}
+  .badge.weak{background:rgba(251,191,36,.14);border-color:rgba(251,191,36,.45);color:#fcd34d}
+  .badge.error{background:rgba(248,113,113,.14);border-color:rgba(248,113,113,.45);color:#fca5a5}
+
+  .banner{background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.4);color:#fecaca;
+    border-radius:14px;padding:11px 13px;font-size:13px;line-height:1.45}
+  .banner.tappable{cursor:pointer}
+  .banner.tappable:active{filter:brightness(1.06)}
+  .banner.hidden{display:none}
+
+  .card{--accent:var(--cyan);position:relative;overflow:hidden;
+    background:linear-gradient(180deg,#101823,#0b1017);border:1px solid #173a44;border-radius:14px;
+    padding:13px 16px 15px;box-shadow:0 10px 26px rgba(0,0,0,.35), inset 0 1px 0 rgba(34,211,238,.14)}
+  /* striscia timing stile rally sulla sommità di ogni card */
+  .card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;
+    background:linear-gradient(90deg,var(--accent) 0 17%,transparent 17% 20%,rgba(255,255,255,.05) 20% 100%)}
+  .c-partial{--accent:#fbbf24;border-color:#3a2f13;box-shadow:0 10px 26px rgba(0,0,0,.35), inset 0 1px 0 rgba(251,191,36,.12)}
+  .c-total{--accent:#22d3ee}
+  .c-speed{--accent:#f87171;border-color:#17423a;box-shadow:0 10px 26px rgba(0,0,0,.35), inset 0 1px 0 rgba(52,211,153,.14)}
+  .c-count{--accent:#34d399}
+  .label{display:flex;align-items:center;gap:8px;font-family:'Chakra Petch',system-ui,sans-serif;
+    font-size:12.5px;letter-spacing:.18em;font-weight:700;color:var(--amber);margin-bottom:6px;line-height:1.25}
+  .label::before{content:'';flex:0 0 auto;width:7px;height:11px;background:currentColor;
+    transform:skewX(-24deg);border-radius:1px}
+  .label.cyan{color:var(--cyan)}
+  .label.green{color:var(--green)}
+  .label .hint{display:block;font:700 10.5px/1.3 system-ui,sans-serif;letter-spacing:.02em;color:var(--muted);margin-top:3px}
+  .big{display:flex;align-items:baseline;gap:9px;font-family:'Rajdhani',system-ui,sans-serif;
+    font-variant-numeric:tabular-nums;font-weight:700;letter-spacing:.01em;line-height:1}
+  #partialM,#totalKm,#vignetta{font-size:clamp(34px,min(17vw,11.5vh),92px);color:var(--cyan);text-shadow:0 0 34px rgba(34,211,238,.22)}
+  #partialM{color:var(--amber);text-shadow:0 0 34px rgba(251,191,36,.22)}
+  #vignetta{color:var(--green);text-shadow:0 0 34px rgba(52,211,153,.22)}
+
+  .speed-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:12px;align-items:end}
+  .speed-grid .side{border-left:1px solid #1d3340;padding-left:12px}
+  .c-speed.off{display:none}
+  .c-speed .label.green, .c-speed .label.cyan{color:var(--red)}
+  .speed-grid.no-avg > div:first-child{display:none}
+  .speed-grid.no-now .side{display:none}
+  .speed-grid.no-avg{grid-template-columns:1fr}
+  .speed-grid.no-now:not(.no-avg){grid-template-columns:1.3fr}
+  .speed-grid.no-avg .side{border-left:0;padding-left:0}
+  #avgSpeed{font-size:clamp(26px,min(12.5vw,9vh),64px);color:var(--red);text-shadow:0 0 28px rgba(248,113,113,.22)}
+  #nowSpeed{font-size:clamp(26px,min(12.5vw,9vh),64px);color:var(--red);text-shadow:0 0 22px rgba(248,113,113,.18)}
+  .unit{font:800 12px/1 var(--mono);letter-spacing:.04em;color:var(--muted);white-space:nowrap}
+
+  /* pulsanti "tasto meccanico" rally: faccia bombata, spigolo, corsa alla pressione */
+  .btn{--face-top:#fcd34d;--face-mid:#fbbf24;--face-bot:#d97706;--edge:#92400e;color:#241a02;
+    appearance:none;border-radius:12px;font:700 14px/1 'Chakra Petch',system-ui,sans-serif;
+    letter-spacing:.16em;text-shadow:0 1px 0 rgba(255,255,255,.3);
+    min-height:50px;padding:0 16px;cursor:pointer;width:100%;position:relative;
+    border:1px solid rgba(0,0,0,.45);
+    background:linear-gradient(180deg,var(--face-top) 0%,var(--face-mid) 52%,var(--face-bot) 100%);
+    box-shadow:
+      inset 0 2px 1px rgba(255,255,255,.55),
+      inset 0 -5px 8px rgba(0,0,0,.2),
+      inset 4px 0 4px -2px rgba(0,0,0,.42),
+      inset -4px 0 4px -2px rgba(0,0,0,.42),
+      0 5px 0 var(--edge),
+      0 10px 16px rgba(0,0,0,.45);
+    transition:transform .05s ease, box-shadow .05s ease, filter .15s}
+  .btn::after{content:'';position:absolute;top:1px;left:3px;right:3px;height:44%;pointer-events:none;
+    border-radius:9px 9px 16px 16px / 7px 7px 20px 20px;
+    background:linear-gradient(102deg,rgba(255,255,255,.4) 0 10%,rgba(255,255,255,.08) 30%,transparent 62%)}
+  .btn:active{transform:translateY(5px);
+    box-shadow:
+      inset 0 3px 6px rgba(0,0,0,.35),
+      inset 0 2px 1px rgba(255,255,255,.25),
+      inset 4px 0 4px -2px rgba(0,0,0,.3),
+      inset -4px 0 4px -2px rgba(0,0,0,.3),
+      0 0 0 var(--edge),
+      0 3px 6px rgba(0,0,0,.4)}
+  .btn:disabled{cursor:default;pointer-events:none;opacity:.55;filter:saturate(.5);
+    box-shadow:inset 0 2px 1px rgba(255,255,255,.4), inset 0 -3px 6px rgba(0,0,0,.3), 0 0 0 var(--edge), 0 4px 8px rgba(0,0,0,.35);
+    text-shadow:0 1px 0 rgba(255,255,255,.2)}
+  .btn-amber{--face-top:#fcd34d;--face-mid:#fbbf24;--face-bot:#d97706;--edge:#92400e;color:#241a02}
+  .btn-red{--face-top:#67e8f9;--face-mid:#22d3ee;--face-bot:#0891b2;--edge:#155e75;color:#04202a}
+  .btn-main{--face-top:#67e8f9;--face-mid:#22d3ee;--face-bot:#0891b2;--edge:#155e75;color:#04202a;
+    min-height:58px;font-size:18px;letter-spacing:.2em;border-radius:14px}
+  .btn-main.stop{--face-top:#fda4a4;--face-mid:#f87171;--face-bot:#dc2626;--edge:#991b1b;color:#2a0707}
+
+  .sticky-action{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:100%;max-width:680px;z-index:6;
+    padding:8px 14px calc(10px + env(safe-area-inset-bottom));
+    background:linear-gradient(180deg,rgba(7,10,15,0) 0%,rgba(7,10,15,.94) 42%,#070a0f 100%)}
+  /* nastro cauzione sopra il pulsante AVVIA */
+  .sticky-action::before{content:'';position:absolute;top:0;left:0;right:0;height:5px;
+    background:repeating-linear-gradient(135deg,rgba(239,68,68,.8) 0 16px,rgba(13,17,23,.9) 16px 32px)}
+
+  #toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom));transform:translate(-50%,26px);
+    background:#e8eef7;color:#0a1017;font:700 13px system-ui,sans-serif;padding:11px 18px;border-radius:999px;
+    opacity:0;pointer-events:none;transition:opacity .18s, transform .18s;z-index:20;max-width:88vw;text-align:center}
+  #toast.show{opacity:1;transform:translate(-50%,0)}
+
+  body.modal-open{overflow:hidden}
+  .backdrop{position:fixed;inset:0;z-index:30;display:flex;align-items:flex-end;justify-content:center;
+    padding:14px calc(14px + env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left));
+    background:rgba(3,6,10,.62);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+    overscroll-behavior:contain}
+  .backdrop.hidden{display:none}
+  .sheet{width:100%;max-width:680px;background:linear-gradient(180deg,#111a25,#0c1219);
+    border:1px solid #1d3a48;border-radius:20px;padding:16px 16px 14px;
+    box-shadow:0 20px 50px rgba(0,0,0,.55);animation:sheetIn .18s ease-out}
+  @keyframes sheetIn{from{transform:translateY(26px);opacity:.4}to{transform:none;opacity:1}}
+  .sheet-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .sheet-title{font-family:'Chakra Petch',system-ui,sans-serif;font-weight:700;font-size:14px;line-height:1;letter-spacing:.2em;color:#e8eef7}
+  .sheet-close{appearance:none;border:1px solid #2c3e52;background:linear-gradient(180deg,#1b2531,#0f1720);
+    color:#9fb2c8;width:36px;height:36px;border-radius:11px;font:700 15px/1 system-ui,sans-serif;cursor:pointer;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.10),inset 0 -3px 5px rgba(0,0,0,.45),0 3px 0 #060b11,0 5px 8px rgba(0,0,0,.4)}
+  .sheet-close:active{transform:translateY(3px);box-shadow:inset 0 2px 5px rgba(0,0,0,.55)}
+  .setting-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;cursor:pointer}
+  .setting-name{font-family:'Chakra Petch',system-ui,sans-serif;font-weight:700;font-size:15px;letter-spacing:.04em;color:#e8eef7}
+  .setting-desc{font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.35}
+  .sheet-note{margin:10px 0 0;font-size:11.5px;line-height:1.45;color:var(--muted)}
+  .switch{appearance:none;-webkit-appearance:none;width:52px;height:30px;border-radius:999px;background:#223040;
+    border:1px solid #2c4052;position:relative;cursor:pointer;flex:0 0 auto;margin:0;
+    box-shadow:inset 0 3px 6px rgba(0,0,0,.5);
+    transition:background .15s,border-color .15s}
+  .switch::after{content:'';position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;
+    background:linear-gradient(180deg,#c3d2e2,#8fa3b8);
+    box-shadow:0 2px 3px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.5);
+    transition:transform .15s,background .15s}
+  .switch:checked{background:var(--green);border-color:var(--green)}
+  .switch:checked::after{transform:translateX(22px);
+    background:linear-gradient(180deg,#e2fff0,#0e7d59);
+    box-shadow:0 2px 3px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.6)}
+
+  @media (max-width:420px){
+    .brand{font-size:15px;letter-spacing:.07em}
+    .badge{font-size:11px;padding:7px 9px}
+    .gear{width:37px;height:37px}
+    .top-actions{gap:6px}
+  }
+  @media (max-width:380px){
+    .ver{display:none}
+  }
+  /* schermi poco alti: comprime spaziature e tasti mantenendo tutto leggibile */
+  @media (max-height:600px){
+    .label{font-size:11.5px;letter-spacing:.14em;margin-bottom:3px}
+    .card{padding:8px 14px 10px}
+    .btn{min-height:42px}
+    .btn-main{min-height:50px}
+    .wrap{gap:8px}
+    main{gap:8px}
+    .speed-grid{gap:8px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><span class="dot" id="gpsDot"></span><span>TRIP REGOLARITÀ</span><span class="ver">2.0</span></div>
+    <div class="top-actions">
+      <div id="gpsBadge" class="badge">GPS —</div>
+      <button id="settingsBtn" class="gear" aria-label="Impostazioni" aria-expanded="false" aria-controls="settings" title="Impostazioni">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3.2"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 8.91a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 8.91 4.6 1.65 1.65 0 0 0 9.91 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <div id="banner" class="banner hidden"></div>
+
+  <main>
+    <section class="card c-partial">
+      <div class="label">DISTANZA PARZIALE METRI</div>
+      <div class="big"><span id="partialM">0</span></div>
+      <button id="resetPartial" class="btn btn-amber" style="margin-top:12px">RESET PARZIALE</button>
+    </section>
+
+    <section class="card c-total">
+      <div class="label cyan">DISTANZA TOTALE KM</div>
+      <div class="big"><span id="totalKm">0,00</span></div>
+      <button id="resetTotal" class="btn btn-red" style="margin-top:12px">RESET TOTALE</button>
+    </section>
+
+    <section class="card c-speed" id="speedCard">
+      <div class="speed-grid">
+        <div>
+          <div class="label green">MEDIA</div>
+          <div class="big"><span id="avgSpeed">0,0</span><span class="unit">km/h</span></div>
+        </div>
+        <div class="side">
+          <div class="label cyan" id="nowLabel">VELOCITÀ</div>
+          <div class="big"><span id="nowSpeed">0</span><span class="unit">km/h</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card c-count">
+      <div class="label green">N° VIGNETTA</div>
+      <div class="big"><span id="vignetta">0</span></div>
+    </section>
+
+    <div class="sticky-action"><button id="toggle" class="btn btn-main">AVVIA</button></div>
+  </main>
+</div>
+
+<div id="toast" role="status"></div>
+
+<div id="settings" class="backdrop hidden" aria-hidden="true">
+  <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="sheet-head">
+      <div id="settingsTitle" class="sheet-title">IMPOSTAZIONI</div>
+      <button id="closeSettings" class="sheet-close" aria-label="Chiudi">✕</button>
+    </div>
+    <label class="setting-row" for="showAvg">
+      <div class="setting-text">
+        <div class="setting-name">Visualizza media?</div>
+        <div class="setting-desc">Mostra la media (km/h)</div>
+      </div>
+      <input type="checkbox" id="showAvg" class="switch" checked>
+    </label>
+    <label class="setting-row" for="showNow">
+      <div class="setting-text">
+        <div class="setting-name">Visualizza velocità attuale?</div>
+        <div class="setting-desc">Mostra la velocità attuale (km/h)</div>
+      </div>
+      <input type="checkbox" id="showNow" class="switch" checked>
+    </label>
+    <p class="sheet-note">Media e velocità continuano a essere calcolate anche quando nascoste.</p>
+  </section>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+
+  const ui = {
+    partialM: $('partialM'), totalKm: $('totalKm'), vignetta: $('vignetta'),
+    avgSpeed: $('avgSpeed'), nowSpeed: $('nowSpeed'), nowLabel: $('nowLabel'),
+    badge: $('gpsBadge'), dot: $('gpsDot'), banner: $('banner'), toast: $('toast'),
+    toggle: $('toggle'), btnPartial: $('resetPartial'), btnTotal: $('resetTotal'),
+    settings: $('settings'), settingsBtn: $('settingsBtn'), closeSettings: $('closeSettings'), showAvg: $('showAvg'), showNow: $('showNow')
+  };
+
+  const S = {
+    tracking:false,
+    demo: /(^|[#?&])demo/.test(location.hash + location.search),
+    showAvg:true, showNow:true,
+    totalKm:0, partialKm:0, vignetta:1,
+    moveMs:0, tripStart:null,
+    gpsReady:false,
+    avgKmh:0,
+    stepLast:null,      // ultima posizione usata per sommare la distanza
+    win:[],             // finestra posizioni per la velocità attuale
+    speed:0,
+    lastFixAt:0,
+    accuracy:null,
+    gps:'idle',
+    watchId:null, demoTimer:null, uiTimer:null, wakeLock:null,
+    bannerTimer:null, bannerClick:null
+  };
+
+  const MAX_ACC = 30;       // scarta i rilevamenti con precisione peggiore (m)
+  const READY_ACC = 12;     // precisione richiesta per abilitare AVVIA (m)
+  const MIN_STEP = 2.5;     // spostamento minimo considerato reale (m)
+  const MAX_STEP = 20;      // soglia massima anti-deriva (m)
+  const SPEED_SPAN_MS = 3000; // intervallo minimo per stimare la velocità attuale
+  const AVG_KEY = 'tripreg2.showAvg';
+  const NOW_KEY = 'tripreg2.showNow';
+
+  const nf2 = new Intl.NumberFormat('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const nf1 = new Intl.NumberFormat('it-IT',{minimumFractionDigits:1,maximumFractionDigits:1});
+  const nf0 = new Intl.NumberFormat('it-IT',{maximumFractionDigits:0});
+  const R = 6371008.8; // raggio medio terrestre (m)
+
+  function haversine(a,b,c,d){
+    const p = Math.PI/180;
+    const dLat = (c-a)*p, dLon = (d-b)*p;
+    const s = Math.sin(dLat/2)**2 + Math.cos(a*p)*Math.cos(c*p)*Math.sin(dLon/2)**2;
+    return 2*R*Math.asin(Math.min(1,Math.sqrt(s)));
+  }
+
+  function toast(msg){
+    ui.toast.textContent = msg;
+    ui.toast.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(()=>ui.toast.classList.remove('show'), 1900);
+  }
+
+  function vibrate(ms){ if (navigator.vibrate) try{ navigator.vibrate(ms||35); }catch(e){} }
+
+  function showBanner(msg, ms, onClick){
+    ui.banner.textContent = msg;
+    ui.banner.classList.toggle('tappable', !!onClick);
+    ui.banner.classList.remove('hidden');
+    S.bannerClick = onClick || null;
+    clearTimeout(S.bannerTimer);
+    if (ms) S.bannerTimer = setTimeout(()=>ui.banner.classList.add('hidden'), ms);
+  }
+  function hideBanner(){ ui.banner.classList.add('hidden'); }
+
+  function setGps(state){
+    S.gps = state;
+    ui.dot.className = 'dot ' + (state==='ok'?'ok':state==='weak'?'weak':state==='error'?'error':'');
+    ui.badge.className = 'badge ' + (state==='ok'?'ok':state==='weak'?'weak':state==='error'?'error':'');
+    const a = S.accuracy;
+    if (state==='ok')       ui.badge.textContent = 'GPS ±' + Math.round(a) + ' m';
+    else if (state==='weak')ui.badge.textContent = 'GPS debole ±' + Math.round(a) + ' m';
+    else if (state==='waiting') ui.badge.textContent = 'GPS in attesa…';
+    else if (state==='error')   ui.badge.textContent = 'GPS non disponibile';
+    else                        ui.badge.textContent = 'GPS —';
+  }
+
+  /* ---------- distanza ---------- */
+
+  function addDistance(meters){
+    const km = meters/1000;
+    S.partialKm += km;
+    S.totalKm   += km;
+  }
+
+  /* ---------- velocità istantanea ---------- */
+
+  function updateSpeed(lat, lon, acc, t){
+    S.win.push({lat:lat, lon:lon, t:t});
+    // dopo un'interruzione lunga (schermo spento, fix mancanti) riparte da una finestra pulita
+    while (S.win.length > 1 && t - S.win[0].t > SPEED_SPAN_MS*2) S.win.shift();
+
+    const now = S.win[S.win.length-1];
+    let base = S.win[0];
+    for (let i=0; i<S.win.length; i++){
+      if (t - S.win[i].t >= SPEED_SPAN_MS){ base = S.win[i]; break; }
+    }
+    const dt = (now.t - base.t)/1000;
+    if (dt < 1.5) return;
+
+    const d = haversine(base.lat, base.lon, now.lat, now.lon);
+    const minMove = Math.max(MIN_STEP, acc*0.4);
+    let v = d >= minMove ? Math.min(300, (d/dt)*3.6) : 0;
+    S.speed = S.speed*0.55 + v*0.45;
+    if (S.speed < 1.2) S.speed = 0;
+  }
+
+  /* ---------- posizioni ---------- */
+
+  function onFix(pos){
+    const c = pos.coords;
+    const t = Number.isFinite(pos.timestamp) ? pos.timestamp : Date.now();
+    const acc = Number.isFinite(c.accuracy) ? c.accuracy : 999;
+    S.accuracy = acc;
+    setGps(acc <= MAX_ACC*0.75 ? 'ok' : acc <= MAX_ACC ? 'weak' : 'weak');
+
+    if (acc <= MAX_ACC){
+      S.lastFixAt = Date.now();
+
+      // AVVIA si abilita solo con un fix di buona precisione
+      if (!S.gpsReady && acc <= READY_ACC){
+        S.gpsReady = true;
+        updateToggle();
+        hideBanner();
+        if (!S.demo) showBanner('Vuoi visualizzare la velocità e la media? Vai nelle impostazioni in alto a destra ⚙ — tocca qui per aprirle.', 9000, function(){
+          setSettings(true); vibrate(20);
+        });
+        vibrate(30);
+      }
+
+      // distanze e velocità si accumulano solo durante la registrazione
+      if (S.tracking){
+        updateSpeed(c.latitude, c.longitude, acc, t);
+
+        const step = Math.max(MIN_STEP, Math.min(acc*0.5, MAX_STEP));
+        if (S.stepLast){
+          const d = haversine(S.stepLast.lat, S.stepLast.lon, c.latitude, c.longitude);
+          if (d >= step){
+            addDistance(d);
+            // Il tempo in movimento è solo quello degli intervalli che hanno prodotto spostamento:
+            // le soste non entrano nella media di viaggio. Il tempo viene limitato anche in base
+            // alla distanza (almeno 1,5 km/h): così una lunga sosta prima di ripartire non viene
+            // conteggiata per intero come movimento.
+            const dtStep = (t - S.stepLast.t)/1000;
+            if (dtStep > 0 && dtStep <= 600){
+              const tMove = Math.min(dtStep, d/0.42);
+              S.moveMs += tMove*1000;
+            }
+            S.stepLast = { lat:c.latitude, lon:c.longitude, t:t };
+          }
+        } else {
+          S.stepLast = { lat:c.latitude, lon:c.longitude, t:t };
+        }
+      }
+    }
+    render();
+  }
+
+  function onErr(err){
+    if (err.code === 1){
+      setGps('error');
+      if (S.tracking) stop();
+      showBanner('Permesso posizione negato. Apri le impostazioni del browser/sito e consenti la posizione, poi ricarica l\'app.');
+    } else if (err.code === 2){
+      setGps('error');
+      if (S.tracking) stop();
+      showBanner('Posizione disattivata sul telefono. Attiva il GPS e riprova.');
+    } else {
+      setGps('weak');
+      S.accuracy = null;
+      render();
+    }
+  }
+
+  /* ---------- demo ---------- */
+
+  function demoTick(){
+    if (!S.tracking) return;
+    if (!S.demoPos) S.demoPos = { lat:45.0703, lon:7.6869 };
+    const d = 11.6; // ~42 km/h, 1 secondo simulato per tick
+    S.demoPos.lat += d/111320;
+    S.demoPos.lon += Math.cos(Date.now()/15000)*d/111320/120;
+    S.accuracy = 4 + Math.random()*3;
+    addDistance(d);
+    S.moveMs += 1000;
+    S.speed = 41.8;
+    S.lastFixAt = Date.now();
+    setGps('ok');
+    render();
+  }
+
+  /* ---------- avvio / pausa ---------- */
+
+  async function acquireWakeLock(){
+    try{
+      if ('wakeLock' in navigator && S.tracking && !S.wakeLock){
+        S.wakeLock = await navigator.wakeLock.request('screen');
+        S.wakeLock.addEventListener('release', ()=>{ S.wakeLock = null; });
+      }
+    }catch(e){}
+  }
+  function releaseWakeLock(){
+    if (S.wakeLock){ try{ S.wakeLock.release(); }catch(e){} S.wakeLock = null; }
+  }
+
+  function start(){
+    if (S.tracking) return;
+    hideBanner();
+
+    if (!S.demo){
+      if (!('geolocation' in navigator)){ showBanner('Questo browser non supporta la geolocalizzazione.'); return; }
+      if (!window.isSecureContext){
+        showBanner('La geolocalizzazione richiede una connessione sicura (HTTPS o localhost). Apri l\'app tramite il link https, non con un indirizzo http:// di rete locale.');
+        return;
+      }
+    }
+
+    S.tracking = true;
+    if (S.tripStart === null) S.tripStart = Date.now();
+    S.stepLast = null;
+    S.win = [];
+    S.speed = 0;
+    S.lastFixAt = Date.now();
+    updateToggle();
+    setGps('waiting');
+
+    if (S.demo){
+      clearInterval(S.demoTimer);
+      S.demoTimer = setInterval(demoTick, 1000);
+    }
+    acquireWakeLock();
+
+    clearInterval(S.uiTimer);
+    S.uiTimer = setInterval(render, 500);
+
+    vibrate(30);
+    render();
+  }
+
+  function stop(){
+    if (!S.tracking) return;
+    S.tracking = false;
+    if (S.demoTimer){ clearInterval(S.demoTimer); S.demoTimer = null; }
+    // il timer UI resta attivo per aggiornare la media anche in pausa/fermo
+    S.stepLast = null;
+    S.win = [];
+    S.speed = 0;
+    releaseWakeLock();
+    updateToggle();
+    setGps('idle');
+    render();
+  }
+
+  function updateToggle(){
+    if (!S.demo && !S.gpsReady){
+      ui.toggle.textContent = 'GPS · COLLEGAMENTO…';
+      ui.toggle.disabled = true;
+      ui.toggle.classList.remove('stop');
+      return;
+    }
+    ui.toggle.disabled = false;
+    ui.toggle.textContent = S.tracking ? '❚❚  PAUSA' : '▶  AVVIA';
+    ui.toggle.classList.toggle('stop', S.tracking);
+  }
+
+  /* ---------- impostazioni ---------- */
+
+  function loadShowAvg(){
+    try{
+      const v = localStorage.getItem(AVG_KEY);
+      return v === null ? true : v === '1';
+    }catch(e){ return true; }
+  }
+  function loadShowNow(){
+    try{
+      const v = localStorage.getItem(NOW_KEY);
+      return v === null ? true : v === '1';
+    }catch(e){ return true; }
+  }
+
+  function applySpeedVisibility(){
+    const card = document.getElementById('speedCard');
+    const grid = document.querySelector('.speed-grid');
+    const bothOff = !S.showAvg && !S.showNow;
+    if (card) card.classList.toggle('off', bothOff);
+    if (grid){
+      grid.classList.toggle('no-avg', !S.showAvg);
+      grid.classList.toggle('no-now', !S.showNow);
+    }
+    if (ui.showAvg) ui.showAvg.checked = S.showAvg;
+    if (ui.showNow) ui.showNow.checked = S.showNow;
+  }
+
+  function setSettings(open){
+    ui.settings.classList.toggle('hidden', !open);
+    ui.settings.setAttribute('aria-hidden', open ? 'false' : 'true');
+    ui.settingsBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    document.body.classList.toggle('modal-open', open);
+    if (open) ui.closeSettings.focus();
+    else if (ui.settings.contains(document.activeElement)) ui.settingsBtn.focus();
+  }
+
+  /* ---------- reset ---------- */
+
+  function resetPartial(){
+    S.vignetta++;
+    const had = S.partialKm > 0.0005;
+    S.partialKm = 0;
+    render(); vibrate(45);
+    toast(had ? 'Parziale azzerato' : 'Parziale già a zero');
+  }
+
+  function resetTotal(){
+    const wasTracking = S.tracking;
+    stop(); // mette in pausa se la registrazione è attiva
+    S.totalKm = 0;
+    S.partialKm = 0;
+    S.vignetta = 1;
+    S.moveMs = 0;
+    S.tripStart = null;
+    S.avgKmh = 0;
+    S.speed = 0;
+    S.win = [];
+    S.stepLast = null;
+    render();
+    vibrate([40,60,40]);
+    toast(wasTracking ? 'Azzerato · media 0,0 · in pausa' : 'Azzerato · media 0,0');
+  }
+
+  /* ---------- render ---------- */
+
+  function render(){
+    // senza fix recenti la velocità attuale scende dolcemente verso zero
+    if (S.tracking && Date.now() - S.lastFixAt > 6000 && S.speed > 0){
+      S.speed *= 0.6;
+      if (S.speed < 1) S.speed = 0;
+    }
+
+    ui.partialM.textContent = nf0.format(Math.round(S.partialKm*1000));
+    ui.totalKm.textContent = nf2.format(S.totalKm);
+    ui.vignetta.textContent = nf0.format(S.vignetta);
+
+    const elapsedMs = S.tripStart ? (Date.now() - S.tripStart) : 0;
+    const moveH = elapsedMs/3600000;
+    S.avgKmh = moveH > 0.0001 ? S.totalKm/moveH : 0;
+    ui.avgSpeed.textContent = nf1.format(S.avgKmh);
+    ui.nowSpeed.textContent = nf0.format(S.speed);
+  }
+
+  /* ---------- eventi ---------- */
+
+  ui.toggle.addEventListener('click', ()=> S.tracking ? stop() : start());
+  ui.btnPartial.addEventListener('click', resetPartial);
+  ui.btnTotal.addEventListener('click', resetTotal);
+
+  ui.settingsBtn.addEventListener('click', ()=> setSettings(true));
+  ui.closeSettings.addEventListener('click', ()=> setSettings(false));
+  ui.settings.addEventListener('click', (e)=>{ if (e.target === ui.settings) setSettings(false); });
+  document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape') setSettings(false); });
+  ui.banner.addEventListener('click', ()=>{ if (S.bannerClick) S.bannerClick(); });
+
+  ui.showAvg.addEventListener('change', ()=>{
+    S.showAvg = ui.showAvg.checked;
+    try{ localStorage.setItem(AVG_KEY, S.showAvg ? '1' : '0'); }catch(e){}
+    applySpeedVisibility();
+    vibrate(25);
+  });
+  ui.showNow.addEventListener('change', ()=>{
+    S.showNow = ui.showNow.checked;
+    try{ localStorage.setItem(NOW_KEY, S.showNow ? '1' : '0'); }catch(e){}
+    applySpeedVisibility();
+    vibrate(25);
+  });
+
+  document.addEventListener('visibilitychange', ()=>{
+    if (document.visibilityState === 'visible') acquireWakeLock();
+  });
+
+  /* ---------- init ---------- */
+
+  updateToggle();
+  S.showAvg = loadShowAvg();
+  S.showNow = loadShowNow();
+  applySpeedVisibility();
+  render();
+  setGps('idle');
+  if (!('geolocation' in navigator)){
+    showBanner('Questo browser non supporta la geolocalizzazione.');
+  } else if (!window.isSecureContext){
+    showBanner('La geolocalizzazione richiede una connessione sicura (HTTPS o localhost). Apri l\'app tramite il link https, non con un indirizzo http:// di rete locale.');
+  } else {
+    if (S.demo){
+      S.gpsReady = true;
+      showBanner('Modalità demo: spostamento simulato, GPS reale disattivato.');
+    } else {
+      navigator.geolocation.watchPosition(onFix, onErr, {
+        enableHighAccuracy:true, maximumAge:1000, timeout:15000
+      });
+      showBanner('Attendi: collegamento GPS in corso…');
+    }
+  }
+  updateToggle();
+
+  if ('serviceWorker' in navigator && window.isSecureContext){
+    window.addEventListener('load', ()=>{
+      navigator.serviceWorker.register('sw.js').catch(()=>{});
+    });
+  }
+})();
+</script>
+</body>
+</html>
