@@ -284,14 +284,14 @@
         <div class="setting-name">Visualizza media?</div>
         <div class="setting-desc">Mostra la media (km/h)</div>
       </div>
-      <input type="checkbox" id="showAvg" class="switch" checked>
+      <input type="checkbox" id="showAvg" class="switch">
     </label>
     <label class="setting-row" for="showNow">
       <div class="setting-text">
         <div class="setting-name">Visualizza velocità attuale?</div>
         <div class="setting-desc">Mostra la velocità attuale (km/h)</div>
       </div>
-      <input type="checkbox" id="showNow" class="switch" checked>
+      <input type="checkbox" id="showNow" class="switch">
     </label>
     <p class="sheet-note">Media e velocità continuano a essere calcolate anche quando nascoste.</p>
   </section>
@@ -314,7 +314,7 @@
   const S = {
     tracking:false,
     demo: /(^|[#?&])demo/.test(location.hash + location.search),
-    showAvg:true, showNow:true,
+    showAvg:false, showNow:false,
     totalKm:0, partialKm:0, vignetta:1,
     moveMs:0, tripStart:null,
     gpsReady:false,
@@ -573,14 +573,14 @@
   function loadShowAvg(){
     try{
       const v = localStorage.getItem(AVG_KEY);
-      return v === null ? true : v === '1';
-    }catch(e){ return true; }
+      return v === null ? false : v === '1';
+    }catch(e){ return false; }
   }
   function loadShowNow(){
     try{
       const v = localStorage.getItem(NOW_KEY);
-      return v === null ? true : v === '1';
-    }catch(e){ return true; }
+      return v === null ? false : v === '1';
+    }catch(e){ return false; }
   }
 
   function applySpeedVisibility(){
